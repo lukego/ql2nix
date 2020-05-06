@@ -24,7 +24,16 @@ let
   bundler = writeTextFile {
     name = "bundler.lisp";
     text = ''
-      (setf *debugger-hook* (lambda (&rest args) (declare (ignore args)) (sb-debug:print-backtrace) (uiop:quit 1)))
+      (setf *debugger-hook*
+            (lambda (&rest args)
+              (declare (ignore args))
+              ;; UIOP may not be loaded yet.  Let's play it safe
+              (let* ((uiop-package (find-package :uiop))
+                     (print-backtrace (when uiop-package (find-symbol "PRINT-BACKTRACE" uiop-package))))
+                (if print-backtrace
+                    (funcall print-backtrace)
+                    (format t "Early fatal error.  No backtrace.  Good luck!~%)))
+              (uiop:quit 1)))
 
       (eval-when (:compile-toplevel :load-toplevel :execute)
         (load "quicklisp/setup.lisp"))
@@ -76,7 +85,7 @@ in mkDerivation rec {
     outhash="''${outhash##*/}"
     outhash="''${outhash%%-*}"
     cat > "$out/lib/common-lisp-settings/bundle-path-config.sh" <<EOF
-    if [ -z "\''${_''${outhash}_NIX_LISP_PATH_CONFIG}" ]; then
+    if [ -z "\''${_''${outhash}_NIX_LISP_PATH_CONFIG+x}" ]; then
     export _''${outhash}_NIX_LISP_PATH_CONFIG=1
     export NIX_LISP_ASDF_PATHS="$NIX_LISP_ASDF_PATHS
     $out/lib/common-lisp/bundle"
